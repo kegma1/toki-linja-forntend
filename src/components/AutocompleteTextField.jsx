@@ -156,7 +156,20 @@ function AutocompleteTextField() {
     const [inputValue, setInputValue] = useState("");
     const [popupVisible, setPopupVisible] = useState(false); 
     const [matches, setMatches] = useState([]);
+    const [highlightedWord, setHighlightedWord] = useState(0); 
     const inputRef = useRef();
+    const refs = useRef([]);
+
+    const getCaret = () => inputRef.current.selectionStart;
+
+    useEffect(() => {
+        if (popupVisible &&refs.current[highlightedWord]) {
+            refs.current[highlightedWord].scrollIntoView({
+                block: "nearest",
+                behavior: "smooth",
+            });
+        }
+    }, [highlightedWord, popupVisible])
    
     const findTriggerMatch = (word) => {
         if(word === "") return []
@@ -177,6 +190,8 @@ function AutocompleteTextField() {
                 return i + 1;
             }
         }
+
+        return 0
     }
 
     const indexOfEndOfWord = (text, caret) => {        
@@ -194,8 +209,9 @@ function AutocompleteTextField() {
     const handleChange = (e) => {
         const newValue = e.target.value;
         setInputValue(newValue);
+        setHighlightedWord(0);
 
-        const currentWord = getCurrentWord(newValue, inputRef.current.selectionStart);
+        const currentWord = getCurrentWord(newValue, getCaret());
         const matchList = findTriggerMatch(currentWord);
 
         if (matchList.length > 0) {
@@ -206,8 +222,33 @@ function AutocompleteTextField() {
         }
     }
 
-    const handleKeyDown = (e) => {
+    const applySuggestion = (selected, text, caret) => {
+        const startIndex = caret === 0           ? caret : indexOfStartOfWord(text, caret);
+        const endIndex =   caret === text.length ? caret : indexOfEndOfWord(text, caret);
 
+        const before = text.slice(0, startIndex);
+        const after = text.slice(endIndex);
+
+        setInputValue(before + String.fromCodePoint(tokiPonaUnicode[selected]) + after)
+        
+
+        setPopupVisible(false)
+    }
+
+    const handleKeyDown = (e) => {
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setHighlightedWord((prev) => (prev + 1) % matches.length);
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setHighlightedWord((prev) =>
+                (prev - 1 + matches.length) % matches.length
+            );
+        } else if (e.key === "Tab" || e.key === " ") {
+            e.preventDefault();
+            const selected = matches[highlightedWord];
+            applySuggestion(selected, inputValue, getCaret());
+        }
     }
 
     return ( 
@@ -224,9 +265,14 @@ function AutocompleteTextField() {
                 <button type="submit" className="SendButton"> pana </button>
             </div>
             {popupVisible && (
-                <ul>
-                    {matches.map((match) => (
-                        <li key={match}>
+                <ul className="SuggestionList">
+                    {matches.map((match, i) => (
+                        <li 
+                            key={match} 
+                            ref={(el) => (refs.current[i] = el)}
+                            onClick={() => applySuggestion(match, inputValue, getCaret())}
+                            className={i === highlightedWord ? "Suggestion Highlighted" : "Suggestion"}
+                        >
                             {String.fromCodePoint(tokiPonaUnicode[match])}
                         </li>
                     ))}

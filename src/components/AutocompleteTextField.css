@@ -23,3 +23,30 @@
     position: relative;
     font-size: larger;
 }
+
+.SuggestionList {
+    list-style: none;
+    position: absolute;
+    max-height: calc(5 * (25px + 2.5px)); 
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding-right: 15px;
+    box-sizing: content-box; 
+}
+
+.Suggestion {
+    background-color: #213547;
+    border-radius: 20px;
+    padding: 1px 10px;
+    margin-bottom: 2.5px;
+    user-select: none; 
+}
+
+.Suggestion:hover {
+    background-color: #323e49;
+    cursor: "pointer";
+}
+
+.Highlighted {
+    background-color: #424547;
+}
