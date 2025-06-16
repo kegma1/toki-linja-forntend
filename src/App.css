@@ -12,6 +12,22 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: "nasin nanpa Latin";
+  src: url("./assets/fonts/nasin-nanpa-4.0.2.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-feature-settings: "liga" 0, "clig" 0;
+}
+
+@font-face {
+  font-family: "nasin nanpa UCSUR";
+  src: url("./assets/fonts/nasin-nanpa-4.0.2-UCSUR.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  
+}
+
 body {
   font-family: "nasin nanpa", sans-serif;
 }
