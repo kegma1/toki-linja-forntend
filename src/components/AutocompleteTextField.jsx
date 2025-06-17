@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 import './AutocompleteTextField.css';  
 
+
+let lastBracketTime = 0;
+let lastBracketKey = null;
+
 const tokiPonaUnicode = {
     a: [[0xF1900]],
-    aa: [[0xF1900, 0xFE00]],
-    aaa: [[0xF1900, 0xFE01]],
     akesi: [[0xF1901], [0xF1901, 0xFE00]],
     ala: [[0xF1902]],
     alasa: [[0xF1903]],
@@ -152,6 +154,26 @@ const tokiPonaUnicode = {
     owe: [[0xF19AE]],
 };
 
+const LongableGlyphs = [
+    0xF1900, // a
+    0xF1903, // alasa
+    0xF1907, // anu
+    0xF1908, // awen
+    0xF1916, // kama
+    0xF1918, // ken
+    0xF1919, // kepeken
+    0xF192C, // lon
+    0xF193D, // nanpa
+    0xF1947, // open
+    0xF194D, // pi
+    0xF1950, // pini
+    0xF1961, // sona
+    0xF1969, // tawa
+    0xF1977, // wile
+    0xF1986, // n
+    0xF19C0, // wa
+]
+
 function AutocompleteTextField() {
     const [inputValue, setInputValue] = useState("");
     const [popupVisible, setPopupVisible] = useState(false); 
@@ -159,9 +181,9 @@ function AutocompleteTextField() {
     const [highlightedWord, setHighlightedWord] = useState(0); 
     const inputRef = useRef();
     const refs = useRef([]);
-
+    
     const getCaret = () => inputRef.current.selectionStart;
-
+    
     useEffect(() => {
         if (popupVisible && refs.current[highlightedWord]) {
             refs.current[highlightedWord].scrollIntoView({
@@ -170,56 +192,62 @@ function AutocompleteTextField() {
             });
         }
     }, [highlightedWord, popupVisible])
-   
+    
     const findMatches = (word) => {
         if(word === "") return []
         return Object.entries(tokiPonaUnicode)
-            .filter(([key]) => key.startsWith(word))
-            .flatMap(([, value]) => value)
-            .map((glyph) => renderGlyphs(glyph))
+        .filter(([key]) => key.startsWith(word))
+        .flatMap(([, value]) => value)
+        .map((glyph) => renderGlyphs(glyph))
     }
-
+    
     const renderGlyphs = (codePoints) => String.fromCodePoint(...codePoints);
     
     const getCurrentWord = (text, caret) => {
         const startIndex = caret === 0           ? caret : indexOfStartOfWord(text, caret);
         const endIndex =   caret === text.length ? caret : indexOfEndOfWord(text, caret);
-
+        
         return text.slice(startIndex, endIndex);
     }
-
+    
     const indexOfStartOfWord = (text, caret) => {
         for (let i = caret - 1; i >= 0; i--) {
             if (!isAlphabetical(text[i])) {
                 return i + 1;
             }
         }
-
+        
         return 0
     }
-
+    
     const indexOfEndOfWord = (text, caret) => {        
         if (!isAlphabetical(text[caret])) return caret;
-
+        
         for (let i = caret + 1; i <= text.length; i++) {
             if (!isAlphabetical(text[i])) {
                 return i;
             }
         }
     }
-
-    const isAlphabetical = (s) => /^[a-zA-Z]$/.test(s)
-
+    
+    const isAlphabetical = (s) => /^[a-zA-Z]$/.test(s);
+    
     const handleChange = (e) => {
         const newValue = e.target.value;
         setInputValue(newValue);
         setHighlightedWord(0);
-
+        
+        updateMatchList(newValue);
+    }
+    
+    const updateMatchList = (newValue) => {
         const currentWord = getCurrentWord(newValue, getCaret());
         const matchList = findMatches(currentWord);
         
         console.log(matchList)
-
+        console.log(currentWord);
+        
+        
         if (matchList.length > 0) {
             setMatches(matchList)
             setPopupVisible(true)
@@ -227,35 +255,125 @@ function AutocompleteTextField() {
             setPopupVisible(false)
         }
     }
-
+    
     const applySuggestion = (code, text, caret) => {
         const startIndex = caret === 0           ? caret : indexOfStartOfWord(text, caret);
         const endIndex =   caret === text.length ? caret : indexOfEndOfWord(text, caret);
 
         const before = text.slice(0, startIndex);
         const after = text.slice(endIndex);
-
-        setInputValue(before + code + String.fromCodePoint(0x200B) + after)
         
-
+        const newValue = before + code + after;
+        setInputValue(newValue)
+        
+        updateMatchList(newValue)
         setPopupVisible(false)
     }
 
     const handleKeyDown = (e) => {
+        const now = Date.now();
+
         if (e.key === "ArrowUp") {
             e.preventDefault();
             setHighlightedWord((prev) => (prev + 1) % matches.length);
         } else if (e.key === "ArrowDown") {
             e.preventDefault();
-            setHighlightedWord((prev) =>
-                (prev - 1 + matches.length) % matches.length
-            );
+            setHighlightedWord((prev) => (prev - 1 + matches.length) % matches.length);
+        } else if (e.key === "[" || e.key === "]") {
+            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
+            lastBracketTime = now;
+            lastBracketKey = e.key;
+
+            if (isDouble) {
+                e.preventDefault();
+                const caret = getCaret();
+
+                const char = e.key === "[" ? String.fromCodePoint(0xF1990) : String.fromCodePoint(0xF1991);
+
+                const newValue = inputValue.slice(0, caret - 1) + char + inputValue.slice(caret);
+                setInputValue(newValue);
+            }
+        } else if (e.key === "(") {
+            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
+            lastBracketTime = now;
+            lastBracketKey = e.key;
+
+            const caret = getCaret();
+            
+            const inputAsList = [...inputValue];
+            const codePointCaret = getCodePointIndex(inputValue, caret);
+            let prevGlyph = inputAsList[codePointCaret - 2];
+            
+            if (prevGlyph?.codePointAt(0) === 0xFE00) {
+                prevGlyph = inputAsList[codePointCaret - 3];
+            }
+            const canGlyphBeLong = LongableGlyphs.includes(prevGlyph?.codePointAt(0));
+
+            if (isDouble && canGlyphBeLong) {
+                e.preventDefault();
+                const newValue = inputValue.slice(0, caret - 1) + String.fromCodePoint(0xF1997) + inputValue.slice(caret);
+                setInputValue(newValue);
+            }
+        } else if (e.key === ")") {
+            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
+            lastBracketTime = now;
+            lastBracketKey = e.key;
+
+            if (isDouble) {
+                e.preventDefault();
+                const caret = getCaret();
+
+                const newValue = inputValue.slice(0, caret - 1) + String.fromCodePoint(0xF1998) + inputValue.slice(caret);
+                setInputValue(newValue);
+            }
+        } else if (e.key === "{" || e.key === "}") {
+            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
+            lastBracketTime = now;
+            lastBracketKey = e.key;
+
+            if (isDouble) {
+                
+                e.preventDefault();
+                const caret = getCaret();
+
+                const char = e.key === "{" ? String.fromCodePoint(0xF199A) : String.fromCodePoint(0xF199B) + String.fromCodePoint(0xF1921);
+
+                const newValue = inputValue.slice(0, caret - 1) + char + inputValue.slice(caret);
+                setInputValue(newValue);
+            }
+        } else if ((e.key === " ") && (!popupVisible || e.shiftKey)) {
+            // make space do shit when in long glyph and shii
         } else if ((e.key === "Tab" || e.key === " ") && popupVisible && !e.shiftKey) {
             e.preventDefault();
             const selected = matches[highlightedWord];
             applySuggestion(selected, inputValue, getCaret());
         }
     }
+
+    const getCodePointIndex = (str, utf16Index) => {
+        let codePointIndex = 0;
+        let i = 0;
+
+        while (i < utf16Index) {
+            const code = str.codePointAt(i);
+            i += code > 0xFFFF ? 2 : 1;
+            codePointIndex++
+        }
+
+        return codePointIndex
+    }
+
+    // const findOpenParam = (str, params, idx) => {
+    //     if (str.length <= idx) return "";
+    //     if (idx > 0) return "";
+
+    //     const open = params[0];
+    //     const close = params[1];
+
+    //     for(const i = idx - 1; i > 0; i--) {
+    //         if (str[i] === char) return char
+    //     }
+    // }
 
     return ( 
         <>
@@ -281,6 +399,7 @@ function AutocompleteTextField() {
                     value={inputValue} 
                     onChange={handleChange} 
                     onKeyDown={handleKeyDown} 
+                    onClick={() => updateMatchList(inputValue)}
                     className="InputField" 
                 />
                 <button type="submit" className="SendButton"> pana </button>
