@@ -89,36 +89,29 @@ function AutocompleteTextField() {
         setPopupVisible(false)
     }
 
+    const bracketMap = {
+        "[": String.fromCodePoint(0xF1990),
+        "]": String.fromCodePoint(0xF1991),
+        ")": String.fromCodePoint(0xF1998),
+        "{": String.fromCodePoint(0xF199A),
+        "}": String.fromCodePoint(0xF199B) + String.fromCodePoint(0xF1921),
+    }
+
     const handleKeyDown = (e) => {
         const now = Date.now();
+        const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
+        lastBracketTime = now;
+        lastBracketKey = e.key;
 
-        if (e.key === "ArrowUp") {
+        const caret = getCaret();
+
+        if (e.key === "ArrowUp" || e.key === "Tab") {
             e.preventDefault();
             setHighlightedWord((prev) => (prev + 1) % matches.length);
         } else if (e.key === "ArrowDown") {
             e.preventDefault();
             setHighlightedWord((prev) => (prev - 1 + matches.length) % matches.length);
-        } else if (e.key === "[" || e.key === "]") {
-            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
-            lastBracketTime = now;
-            lastBracketKey = e.key;
-
-            if (isDouble) {
-                e.preventDefault();
-                const caret = getCaret();
-
-                const char = e.key === "[" ? String.fromCodePoint(0xF1990) : String.fromCodePoint(0xF1991);
-
-                const newValue = inputValue.slice(0, caret - 1) + char + inputValue.slice(caret);
-                setInputValue(newValue);
-            }
         } else if (e.key === "(") {
-            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
-            lastBracketTime = now;
-            lastBracketKey = e.key;
-
-            const caret = getCaret();
-            
             const inputAsList = [...inputValue];
             const codePointCaret = getCodePointIndex(inputValue, caret);
             let prevGlyph = inputAsList[codePointCaret - 2];
@@ -134,36 +127,30 @@ function AutocompleteTextField() {
                 const newValue = inputValue.slice(0, caret - 1) + String.fromCodePoint(0xF1997) + inputValue.slice(caret);
                 setInputValue(newValue);
             }
-        } else if (e.key === ")") {
-            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
-            lastBracketTime = now;
-            lastBracketKey = e.key;
-
-            if (isDouble) {
+        } else if (bracketMap.hasOwnProperty(e.key) && isDouble) {
                 e.preventDefault();
                 const caret = getCaret();
-
-                const newValue = inputValue.slice(0, caret - 1) + String.fromCodePoint(0xF1998) + inputValue.slice(caret);
-                setInputValue(newValue);
-            }
-        } else if (e.key === "{" || e.key === "}") {
-            const isDouble = (e.key === lastBracketKey && now - lastBracketTime < 300);
-            lastBracketTime = now;
-            lastBracketKey = e.key;
-
-            if (isDouble) {
-                
-                e.preventDefault();
-                const caret = getCaret();
-
-                const char = e.key === "{" ? String.fromCodePoint(0xF199A) : String.fromCodePoint(0xF199B) + String.fromCodePoint(0xF1921);
-
+                const char = bracketMap[e.key as keyof typeof bracketMap];
                 const newValue = inputValue.slice(0, caret - 1) + char + inputValue.slice(caret);
                 setInputValue(newValue);
-            }
         } else if ((e.key === " ") && (!popupVisible || e.shiftKey)) {
-            // make space do shit when in long glyph and shii
-        } else if ((e.key === "Tab" || e.key === " ") && popupVisible && !e.shiftKey) {
+            const [isInCartouche, cartoucheIndex] = isCaretInParams(inputValue, String.fromCodePoint(0xF1990) + String.fromCodePoint(0xF1991), caret)
+            const [isInLongGlyph, longGlyphIndex] = isCaretInParams(inputValue, String.fromCodePoint(0xF1997) + String.fromCodePoint(0xF1998), caret)
+            const [isInReverseLongGlyph, reverseLongGlyphIndex] = isCaretInParams(inputValue, String.fromCodePoint(0xF199A) + String.fromCodePoint(0xF199B), caret)
+
+            let space = String.fromCodePoint(0x3000)
+
+
+            if (isInCartouche || isInLongGlyph || isInReverseLongGlyph) {
+                // find closes value and add coresponding space
+                // cartoucheIndex = F1992
+                // longGlyphIndex = reverseLongGlyphIndex = F1999
+            } 
+            e.preventDefault();
+            
+            const newValue = inputValue.slice(0, caret) + space + inputValue.slice(caret);
+            setInputValue(newValue);
+        } else if ((e.key === " ") && popupVisible && !e.shiftKey) {
             e.preventDefault();
             const selected = matches[highlightedWord];
             applySuggestion(selected, inputValue, getCaret());
@@ -183,17 +170,19 @@ function AutocompleteTextField() {
         return codePointIndex
     }
 
-    // const findOpenParam = (str, params, idx) => {
-    //     if (str.length <= idx) return "";
-    //     if (idx > 0) return "";
+    const isCaretInParams = (str: string, params: string, idx: number) : [boolean | null, number | null] => {
+        if (str.length <= idx) return [null, null];
+        if (idx > 0) return [null, null];
 
-    //     const open = params[0];
-    //     const close = params[1];
+        const open = params[0];
+        const close = params[1];
 
-    //     for(const i = idx - 1; i > 0; i--) {
-    //         if (str[i] === char) return char
-    //     }
-    // }
+        for(let i = idx - 1; i > 0; i--) {
+            if (str[i] === open) return [true, i];
+            if (str[i] === close) return [false, null];
+        }
+        return [false, null];
+    }
 
     return ( 
         <>
